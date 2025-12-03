@@ -1,88 +1,96 @@
 import tkinter as tk
 from ctypes import WinDLL, c_int
 
-
-class Ficha:
-    def __init__(self, jugador):
-        self.jugador = jugador  # referencia al jugador
-        self.pos = None  # None = en casa, o índice en camino
-
-class Jugador:
-    def __init__(self, color):
-        self.color = color
-        self.fichas = [Ficha(self) for _ in range(4)]
-
-
-# Cargar DLL
 dll = WinDLL("./LudoLibreria.dll")
+
 tirarDado = dll.tirarDado
 tirarDado.restype = c_int
 
+getTurno = dll.getTurno
+getTurno.restype = c_int
 
-# Funcion para tirar dado
-def tirar():
+avanzarTurno = dll.avanzarTurno
+avanzarTurno.restype = c_int
+
+puedeSacarFicha = dll.puedeSacarFicha
+puedeSacarFicha.argtypes = (c_int,)
+puedeSacarFicha.restype = c_int
+
+esComida = dll.esComida
+esComida.argtypes = (c_int, c_int, c_int, c_int)
+esComida.restype = c_int
+
+esVictoria = dll.esVictoria
+esVictoria.argtypes = (c_int, c_int, c_int, c_int)
+esVictoria.restype = c_int
+
+esBloqueo = dll.esBloqueo
+esBloqueo.argtypes = (c_int, c_int, c_int, c_int)
+esBloqueo.restype = c_int
+
+sumarDosNumeros = dll.sumarDosNumeros
+sumarDosNumeros.argtypes = (c_int, c_int)
+sumarDosNumeros.restype = c_int
+
+restarDosNumeros = dll.restarDosNumeros
+restarDosNumeros.argtypes = (c_int, c_int)
+restarDosNumeros.restype = c_int
+
+
+def actualizar_turno_label():
+    turno = getTurno()
+    turno_label.config(text=f"Turno del Jugador {turno + 1}")
+
+
+def lanzar_dado():
     resultado = tirarDado()
-    lbl_dado.config(text=str(resultado), font=("Arial", 40))
+    resultado_label.config(text=f"Dado: {resultado}")
+
+    # ejemplo de uso MASM
+    if puedeSacarFicha(resultado) == 1:
+        info_label.config(text="Puede sacar ficha (dado = 6)")
+    else:
+        info_label.config(text="No puede sacar ficha")
+
+    avanzarTurno()
+    actualizar_turno_label()
 
 
-# Crear ventana
-ventana = tk.Tk()
-ventana.title("Ludo 15x15 con colores")
-ventana.geometry("800x800")
+def probar_masm_extra():
+    # valores de ejemplo
+    f1, f2, f3, f4 = 10, 10, 3, 5
+    bloqueo = esBloqueo(f1, f2, f3, f4)
+    victoria = esVictoria(57, 57, 57, 57)
+    comida = esComida(12, 0, 12, 1)
 
-# Frame para botón y dado
-frame_izq = tk.Frame(ventana)
-frame_izq.pack(side="left", padx=10, pady=10)
+    texto = f"""
+Bloqueo: {bloqueo}
+Victoria: {victoria}
+Comida: {comida}
+    """
+    info_label.config(text=texto)
 
-btn_tirar = tk.Button(frame_izq, text="Tirar Dado", command=tirar, font=("Arial", 14))
-btn_tirar.pack(pady=10)
 
-lbl_dado = tk.Label(frame_izq, text="", font=("Arial", 40))
-lbl_dado.pack(pady=20)
+# interfaz senciulla
 
-# Canvas para tablero
-canvas = tk.Canvas(ventana, width=600, height=600)
-canvas.pack(side="right", padx=10, pady=10)
+root = tk.Tk()
+root.title("Ludo + MASM DLL")
 
-# Tamaño de cada celda
-cell_size = 40
+turno_label = tk.Label(root, text="Turno del Jugador 1", font=("Arial", 16))
+turno_label.pack(pady=10)
 
-# Colores
-colors = {
-    "rojo": "red",
-    "verde": "green",
-    "amarillo": "yellow",
-    "azul": "blue",
-    "camino": "white",
-    "centro": "gray"
-}
+btn_dado = tk.Button(root, text="Tirar dado", font=("Arial", 16), command=lanzar_dado)
+btn_dado.pack(pady=10)
 
-# Dibujar tablero 15x15
-for i in range(15):
-    for j in range(15):
-        x1 = j * cell_size
-        y1 = i * cell_size
-        x2 = x1 + cell_size
-        y2 = y1 + cell_size
+resultado_label = tk.Label(root, text="Dado: -", font=("Arial", 16))
+resultado_label.pack(pady=10)
 
-        # Bases
-        if i < 6 and j < 6:
-            color = colors["rojo"]
-        elif i < 6 and j > 8:
-            color = colors["verde"]
-        elif i > 8 and j < 6:
-            color = colors["amarillo"]
-        elif i > 8 and j > 8:
-            color = colors["azul"]
-        # Camino vertical y horizontal
-        elif j == 7 or i == 7:
-            color = colors["camino"]
-        # Centro
-        elif 6 <= i <= 8 and 6 <= j <= 8:
-            color = colors["centro"]
-        else:
-            color = colors["camino"]
+btn_test = tk.Button(root, text="Probar funciones MASM", font=("Arial", 14), command=probar_masm_extra)
+btn_test.pack(pady=10)
 
-        canvas.create_rectangle(x1, y1, x2, y2, fill=color, outline="black")
+info_label = tk.Label(root, text="---", font=("Arial", 14))
+info_label.pack(pady=10)
 
-ventana.mainloop()
+actualizar_turno_label()
+
+root.mainloop()
