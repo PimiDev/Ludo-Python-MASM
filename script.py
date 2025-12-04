@@ -22,30 +22,58 @@ nueva_pos.restype = c_int
 # Globals / estado
 # ----------------------------
 accion_desde_pregunta = False
-NOMBRES_JUGADORES = ["Rojo", "Verde", "Azul", "Amarillo"]
+NOMBRES_JUGADORES = ["Rojo", "Verde", "Amarillo", "Azul"]
 
 # Camino: incluye 0..51 (anillo) y luego zonas seguras por jugador (52+)
 CAMINO = [
-    (250, 10), (250, 40), (250, 70), (250, 100), (250, 130), (250, 160),
-    (250, 190), (250, 220), (250, 250), (250, 280), (250, 310), (250, 340),
-    (250, 370), (250, 400), (250, 430), (250, 460),
-    (220, 460), (190, 460), (160, 460), (130, 460), (100, 460), (70, 460),
-    (40, 460), (10, 460),
-    (10, 430), (10, 400), (10, 370), (10, 340), (10, 310), (10, 280),
-    (10, 250), (10, 220), (10, 190), (10, 160), (10, 130), (10, 100),
-    (10, 70), (10, 40), (10, 10),
-    (40, 10), (70, 10), (100, 10), (130, 10), (160, 10),
-    (190, 10), (220, 10),
-    (220, 10), (190, 10), (160, 10), (130, 10), (100, 10), (70, 10),
-    (250, 40), (250, 70), (250, 100), (250, 130), (250, 160), (250, 190),
-    (280, 460), (310, 460), (340, 460), (370, 460), (400, 460), (430, 460),
-    (10, 430), (10, 400), (10, 370), (10, 340), (10, 310), (10, 280)
+    #0-12 (1-13)
+   (70, 210), (100, 210), (130, 210), (150, 210), (180, 210),
+    (210, 180),(210, 150), (210, 120), (210, 100), (210, 70), (210, 40),
+    (240, 40), (260, 40),
+
+    #13-25 (14-26)
+    (260, 70), (260, 100), (260, 120), (260, 150), (260, 180),
+    (290, 210), (320, 210), (340, 210), (360, 210), (380, 210), (410, 210),
+    (410, 210), (410, 260),
+
+    #26-38 (27-39)
+    (400, 260), (360, 260), (340, 260), (320, 260), (300, 260),
+    (260, 270), (260, 290), (260, 310), (260, 340), (260, 360), (260, 380),
+    (240, 380), (210, 380),
+
+    #39-51 (40- 52)
+   (210, 400), (210, 340), (210, 320), (210, 300), (210, 280),
+   (260, 260), (220, 260), (200,260), (180,260), (150,260), (100,260),
+    (70,230),(100,230),
+
+    #zona segura roja 52-57 (53-58)
+    (70,230),(100,230),(130,230),(150,230),(180,230),(210,230),
+
+    #zona segura verde 58-63 (59-64)
+    (240,70),(240,100),(240,120),(240,150),(240,180),(240,210),
+
+    #zona segura amarillo 64-69 (65-70)
+    (360,230),(340,230),(320,230),(290,230),(260,230),(210,230),
+
+    #zona segura azul 70-75 (71-76)
+    (240,360),(240,340),(240,320),(240,300),(240,280),(240,260),
 ]
 
-estado_jugadores = {0: {"fuera": 0}, 1: {"fuera": 0}, 2: {"fuera": 0}, 3: {"fuera": 0}}
+estado_jugadores = {
+    0: {"fuera": 0},
+    1: {"fuera": 0},
+    2: {"fuera": 0},
+    3: {"fuera": 0}
+}
+
 ultimo_dado = 0
 
 # Interfaz TK
+
+
+
+
+
 root = tk.Tk()
 root.title("Ludo con MASM + Python")
 
@@ -66,13 +94,13 @@ except Exception:
 CASAS = {
     0: [(80, 80),  (140, 80),  (80, 140),  (140, 140)],   # Rojo
     1: [(390, 80), (330, 80), (390, 140), (330, 140)],    # verde
-    2: [(80, 330), (140, 390), (80, 390), (140, 330)],    # azul
-    3: [(390, 330), (330, 390), (390, 390), (330, 330)],  # Amarillo
+    2: [(390, 330), (330, 390), (390, 390), (330, 330)],  #amarillo
+    3: [(80, 330), (140, 390), (80, 390), (140, 330)], # azul
 }
 
 fichas = {}
 posiciones = {}
-colores = ["red", "green", "blue", "yellow"]
+colores = ["red", "green", "yellow", "blue"]
 
 for jugador in range(4):
     for f in range(4):
@@ -176,7 +204,8 @@ def mover_ficha(jugador):
     # Buscar fichas fuera
     fichas_fuera = []
     for f in range(4):
-        if posiciones[(jugador, f)] != -1 and posiciones[(jugador, f)] < 1000:  # simple filtro
+        pos = posiciones[(jugador, f)]
+        if pos != -1 and pos < 1000:
             fichas_fuera.append(f)
 
     if not fichas_fuera:
@@ -184,44 +213,14 @@ def mover_ficha(jugador):
         terminar_accion()
         return
 
-    # Si solo hay una ficha disponible, moverla, si no -> por ahora primera disponible
+    # Si solo hay una ficha → moverla directamente
     if len(fichas_fuera) == 1:
-        ficha = fichas_fuera[0]
-        mover_ficha_seleccionada(jugador, ficha)
+        mover_ficha_seleccionada(jugador, fichas_fuera[0])
         return
 
-    # Si hay más de una ficha → abrir selector
+    # Si hay varias → abrir selector
     seleccionar_ficha(jugador, fichas_fuera, lambda f: mover_ficha_seleccionada(jugador, f))
-    return
 
-    pos = posiciones[(jugador, ficha)]
-    # llamar a la DLL: posActual, pasos, jugador
-    try:
-        nueva = nueva_pos(pos, ultimo_dado, jugador)
-    except Exception as e:
-        fichas_label.config(text=f"Error al calcular nueva posición: {e}")
-        terminar_accion()
-        return
-
-    posiciones[(jugador, ficha)] = nueva
-
-    # Si la nueva posición está fuera del arreglo CAMINO -> la consideramos 'meta' y ocultamos
-    if nueva >= len(CAMINO) or nueva < 0:
-        fichas_label.config(text=f"¡Ficha {ficha + 1} llegó a la meta o fuera de mapa ({nueva})!")
-        canvas.coords(fichas[(jugador, ficha)], -100, -100, -100, -100)
-        estado_jugadores[jugador]["fuera"] -= 1
-    else:
-        # mover gráficamente
-        x, y = CAMINO[nueva]
-        canvas.coords(fichas[(jugador, ficha)], x, y, x + 30, y + 30)
-        fichas_label.config(text=f"Ficha {ficha + 1} movida a pos {nueva}")
-
-    # ---- SI VIENE DE PREGUNTA, NO AVANZAMOS TURNO (solo limpiamos flag) ----
-    if accion_desde_pregunta:
-        accion_desde_pregunta = False
-        return
-
-    terminar_accion()
 
 
 def sacar_ficha(jugador):
@@ -288,12 +287,19 @@ def mover_ficha_seleccionada(jugador, ficha):
     global accion_desde_pregunta
 
     pos = posiciones[(jugador, ficha)]
-    nueva = nueva_pos(pos, ultimo_dado, jugador)
+
+    try:
+        nueva = nueva_pos(pos, ultimo_dado, jugador)
+    except Exception as e:
+        fichas_label.config(text=f"Error al calcular nueva posición: {e}")
+        terminar_accion()
+        return
+
     posiciones[(jugador, ficha)] = nueva
 
-    # Llegó a meta
-    if nueva >= 58:
-        fichas_label.config(text=f"¡Ficha {ficha + 1} llegó a la meta!")
+    # Meta o fuera de CAMINO
+    if nueva >= len(CAMINO) or nueva < 0:
+        fichas_label.config(text=f"¡Ficha {ficha + 1} llegó a la meta ({nueva})!")
         canvas.coords(fichas[(jugador, ficha)], -100, -100, -100, -100)
         estado_jugadores[jugador]["fuera"] -= 1
     else:
@@ -301,6 +307,7 @@ def mover_ficha_seleccionada(jugador, ficha):
         canvas.coords(fichas[(jugador, ficha)], x, y, x + 30, y + 30)
         fichas_label.config(text=f"Ficha {ficha + 1} movida a pos {nueva}")
 
+    # Si viene de pregunta → NO avanzar turno
     if accion_desde_pregunta:
         accion_desde_pregunta = False
         return
@@ -310,8 +317,7 @@ def mover_ficha_seleccionada(jugador, ficha):
 
 
 
-# Botones y arranque
-tk.Button(panel, text="Avanzar Turno (manual)", command=avanzar_turno_btn).pack(pady=5)
+
 root.resizable(False, False)
 mostrar_turno()
 root.mainloop()
