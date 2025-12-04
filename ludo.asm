@@ -7,7 +7,6 @@ PUBLIC getTurno
 PUBLIC avanzarTurno
 PUBLIC puedeSacarFicha
 PUBLIC moverFicha
-PUBLIC traducirPosicion
 
 .data
 
@@ -71,143 +70,204 @@ puedeSacarFicha PROC STDCALL dado:DWORD
 puedeSacarFicha ENDP
 
 
-; DWORD moverFicha(DWORD posActual, DWORD pasos, DWORD jugador)
-moverFicha PROC STDCALL posActual:DWORD, pasos:DWORD, jugador:DWORD
-    mov eax, posActual
-    mov ebx, pasos
-    mov ecx, jugador
 
-    ; Si está en casa (-1)
+; ============================================================
+; DWORD moverFicha(DWORD posActual, DWORD pasos, DWORD jugador)
+; Reglas:
+;  - Casa = -1
+;  - Sale con 5 o 6
+;  - Tablero principal = 0 a 51 (52 casillas)
+;  - Zonas seguras:
+;        J0 - 52-57 (meta 57)
+;        J1 - 58-63 (meta 63)
+;        J2 - 64-69 (meta 69)
+;        J3 - 70-75 (meta 75)
+;  - Meta final = 100
+; ============================================================
+
+moverFicha PROC STDCALL posActual:DWORD, pasos:DWORD, jugador:DWORD
+    mov eax, posActual     ; eax = posActual
+    mov ebx, pasos         ; ebx = pasos
+    mov ecx, jugador       ; ecx = jugador
+
+    ; =============================
+    ; 1) SI ESTa EN CASA (-1)
+    ; =============================
     cmp eax, -1
     jne verificar_seguro
 
-    ; Solo puede salir con 6
+    cmp ebx, 5
+    je salir_de_casa
     cmp ebx, 6
-    jne stay_home
-    
-    ; Salir a la primera casilla según jugador
+    je salir_de_casa
+
+    ; No sale
+    mov eax, -1
+    jmp done
+
+salir_de_casa:
     cmp ecx, 0
-    je jugador0_salida
+    je j0_s
     cmp ecx, 1
-    je jugador1_salida
+    je j1_s
     cmp ecx, 2
-    je jugador2_salida
+    je j2_s
     ; jugador 3
     mov eax, 39
     jmp done
 
-jugador0_salida:
-    mov eax, 0
-    jmp done
-jugador1_salida:
-    mov eax, 13
-    jmp done
-jugador2_salida:
-    mov eax, 26
-    jmp done
+j0_s:
+mov eax, 0  
+jmp done
 
-stay_home:
-    mov eax, -1
-    jmp done
+j1_s:
+mov eax, 13 
+jmp done
 
+j2_s: 
+mov eax, 26 
+jmp done
+
+    ; =============================
+    ; 2) VERIFICAR ZONA SEGURA
+    ; =============================
 verificar_seguro:
-    ; Si está en zona segura (pos >= 52)
+    cmp eax, 100
+    je ya_meta
+
     cmp eax, 52
-    jae mover_en_seguro
+    jae mover_seguro
 
-    ; Movimiento normal en tablero principal
-    add eax, ebx
-    
-    ; Verificar si pasa por entrada a zona segura
-    cmp ecx, 0
-    jne check_jugador1
-    ; Jugador 0 - entrada en casilla 51
+    ; =============================
+    ; 3) MOVIMIENTO EN TABLERO
+    ; =============================
+    mov edx, eax        ; guardar posicion original
+    add eax, ebx        ; mover
+
+    ; ----- aplicar wrap 0–51 -----
     cmp eax, 52
-    jl check_wrap
-    mov eax, 52  ; entrar a zona segura
-    jmp done
-
-check_jugador1:
-    cmp ecx, 1
-    jne check_jugador2
-    ; Jugador 1 - entrada después de casilla 12
-    cmp eax, 13
-    jl check_wrap
-    ; Si pasa de 13, ir a zona segura
-    sub eax, 13
-    add eax, 52
-    jmp done
-
-check_jugador2:
-    cmp ecx, 2
-    jne check_jugador3
-    ; Jugador 2 - entrada después de casilla 25
-    cmp eax, 26
-    jl check_wrap
-    ; Si pasa de 26, ir a zona segura
-    sub eax, 26
-    add eax, 58  ; 52 + 6
-    jmp done
-
-check_jugador3:
-    ; Jugador 3 - entrada después de casilla 38
-    cmp eax, 39
-    jl check_wrap
-    ; Si pasa de 39, ir a zona segura
-    sub eax, 39
-    add eax, 64  ; 52 + 12
-    jmp done
-
-check_wrap:
-    ; Wrap alrededor del tablero (0-51)
-    cmp eax, 51
-    jle done
+    jl  comprobar_portal
     sub eax, 52
+
+comprobar_portal:
+
+    ; ========== PORTALES ==========
+    ; JUGADOR 0 portal = 51 - zona 52
+    cmp ecx, 0
+    jne portal_j1
+
+    cmp edx, 51
+    jae normal_j0
+    cmp eax, 51
+    jb  normal_j0
+
+    ; PASÓ POR PORTAL
+    mov eax, 52
     jmp done
 
-mover_en_seguro:
-    ; Ya está en zona segura (52-57 para jugador 0)
+normal_j0:
+    jmp wrap_done
+
+; --------------------------------------------------
+
+portal_j1:
+    ; J1 portal = 12 - zona 58
+    cmp ecx, 1
+    jne portal_j2
+
+    cmp edx, 12
+    jae normal_j1
+    cmp eax, 12
+    jb  normal_j1
+
+    mov eax, 58
+    jmp done
+
+normal_j1:
+    jmp wrap_done
+
+; --------------------------------------------------
+
+portal_j2:
+    ; J2 portal = 25 - zona 64
+    cmp ecx, 2
+    jne portal_j3
+
+    cmp edx, 25
+    jae normal_j2
+    cmp eax, 25
+    jb  normal_j2
+
+    mov eax, 64
+    jmp done
+
+normal_j2:
+    jmp wrap_done
+
+; --------------------------------------------------
+
+portal_j3:
+    ; J3 portal = 38 - zona 70
+
+    cmp edx, 38
+    jae normal_j3
+    cmp eax, 38
+    jb  normal_j3
+
+    mov eax, 70
+    jmp done
+
+normal_j3:
+
+wrap_done:
+    jmp done
+
+; ============================================================
+; 4) MOVIMIENTO EN ZONA SEGURA
+; ============================================================
+mover_seguro:
     add eax, ebx
-    cmp eax, 58
-    jl done
-    mov eax, 58  ; Llegó a la meta
+
+    ; Jugador 0: meta en 57
+    cmp ecx, 0
+    jne meta_j1
+    cmp eax, 57
+    jle done
+    mov eax, 100
     jmp done
 
+meta_j1:
+    ; Jugador 1: meta 63
+    cmp ecx, 1
+    jne meta_j2
+    cmp eax, 63
+    jle done
+    mov eax, 100
+    jmp done
+
+meta_j2:
+    ; Jugador 2: meta 69
+    cmp ecx, 2
+    jne meta_j3
+    cmp eax, 69
+    jle done
+    mov eax, 100
+    jmp done
+
+meta_j3:
+    ; Jugador 3: meta 75
+    cmp eax, 75
+    jle done
+    mov eax, 100
+    jmp done
+
+; ============================================================
+ya_meta:
+    mov eax, 100
+
+; ============================================================
 done:
     ret 12
 moverFicha ENDP
-
-
-
-; DWORD traducirPosicion(DWORD jugador, DWORD pos)
-traducirPosicion PROC jugador:DWORD, pos:DWORD
-
-    mov eax, pos
-
-    ; ZONA SEGURA (52+)
-    cmp eax, 52
-    jae seguro
-
-    ; CAMINO GLOBAL 0–51
-    mov ecx, jugador
-    mov edx, 13
-    imul ecx, edx
-    add eax, ecx
-    mov edx, 52
-    div edx
-    mov eax, edx
-    ret
-
-seguro:
-    sub eax, 52
-    mov ecx, jugador
-    mov edx, 6
-    imul ecx, edx
-    add eax, ecx
-    add eax, 52
-    ret
-
-traducirPosicion ENDP
-
 
 END
