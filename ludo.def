@@ -1,0 +1,9 @@
+LIBRARY LudoLibreria
+EXPORTS
+	sumarDosNumeros
+	restarDosNumeros
+	tirarDado
+	getTurno
+	avanzarTurno
+	puedeSacarFicha
+	moverFicha
