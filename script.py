@@ -1,179 +1,272 @@
 import tkinter as tk
-from tkinter import PhotoImage
-from ctypes import WinDLL, c_int
+from tkinter import Canvas, PhotoImage
+from ctypes import WinDLL, c_int, c_uint
 
 
 dll = WinDLL("./LudoLibreria.dll")
-tirarDado = dll.tirarDado; tirarDado.restype = c_int
-getTurno = dll.getTurno; getTurno.restype = c_int
-avanzarTurno = dll.avanzarTurno; avanzarTurno.restype = c_int
-puedeSacarFicha = dll.puedeSacarFicha; puedeSacarFicha.argtypes = [c_int]; puedeSacarFicha.restype = c_int
-nueva_pos = dll.moverFicha; nueva_pos.argtypes = [c_int, c_int]; nueva_pos.restype = c_int
 
+tirarDado = dll.tirarDado
+tirarDado.restype = c_int
 
-TABLERO_SIZE = 416
-FILAS, COLS = 15, 15
-CELDA = TABLERO_SIZE / FILAS
-MATRIZ = [[(c*CELDA, f*CELDA) for c in range(COLS)] for f in range(FILAS)]
+getTurno = dll.getTurno
+getTurno.restype = c_int
 
+avanzarTurno = dll.avanzarTurno
+avanzarTurno.restype = c_int
 
-SALIDAS = {
-    0: (6,1),   # Rojo
-    1: (1,8),   # Verde
-    2: (13,6),  # Azul
-    3: (8,13)   # Amarillo
-}
+nueva_pos = dll.moverFicha
+nueva_pos.argtypes = [c_int, c_int, c_int]  # posActual, pasos, jugador
+nueva_pos.restype = c_int
 
+# ----------------------------
+# Globals / estado
+# ----------------------------
+accion_desde_pregunta = False
+NOMBRES_JUGADORES = ["Rojo", "Verde", "Azul", "Amarillo"]
 
-def generar_borde():
-    borde = []
-    # Arriba
-    for c in range(1,14):
-        borde.append((0,c))
-    # Derecha
-    for f in range(1,14):
-        borde.append((f,14))
-    # Abajo
-    for c in range(13,0,-1):
-        borde.append((14,c))
-    # Izquierda
-    for f in range(13,0,-1):
-        borde.append((f,0))
-    return borde
-BORDE = generar_borde()
+# Camino: incluye 0..51 (anillo) y luego zonas seguras por jugador (52+)
+CAMINO = [
+    (250, 10), (250, 40), (250, 70), (250, 100), (250, 130), (250, 160),
+    (250, 190), (250, 220), (250, 250), (250, 280), (250, 310), (250, 340),
+    (250, 370), (250, 400), (250, 430), (250, 460),
+    (220, 460), (190, 460), (160, 460), (130, 460), (100, 460), (70, 460),
+    (40, 460), (10, 460),
+    (10, 430), (10, 400), (10, 370), (10, 340), (10, 310), (10, 280),
+    (10, 250), (10, 220), (10, 190), (10, 160), (10, 130), (10, 100),
+    (10, 70), (10, 40), (10, 10),
+    (40, 10), (70, 10), (100, 10), (130, 10), (160, 10),
+    (190, 10), (220, 10),
+    (220, 10), (190, 10), (160, 10), (130, 10), (100, 10), (70, 10),
+    (250, 40), (250, 70), (250, 100), (250, 130), (250, 160), (250, 190),
+    (280, 460), (310, 460), (340, 460), (370, 460), (400, 460), (430, 460),
+    (10, 430), (10, 400), (10, 370), (10, 340), (10, 310), (10, 280)
+]
 
-#
-def construir_camino(salida):
-    fila_salida, col_salida = salida
-    # Encuentra el índice más cercano en borde
-    index = min(range(len(BORDE)), key=lambda i: abs(BORDE[i][0]-fila_salida)+abs(BORDE[i][1]-col_salida))
-    camino = BORDE[index:] + BORDE[:index]
-    camino = camino[:52]
-
-    # Zona de meta según esquina
-    if salida == (6,1):        # Rojo, arriba izquierda
-        meta = [(7,1),(7,2),(7,3),(7,4),(7,5)]
-    elif salida == (1,8):      # Verde, arriba derecha
-        meta = [(1,7),(2,7),(3,7),(4,7),(5,7)]
-    elif salida == (13,6):     # Azul, abajo izquierda
-        meta = [(13,7),(12,7),(11,7),(10,7),(9,7)]
-    elif salida == (8,13):     # Amarillo, abajo derecha
-        meta = [(7,13),(7,12),(7,11),(7,10),(7,9)]
-    camino.extend(meta)
-    return camino
-
-CAMINOS = {j: construir_camino(SALIDAS[j]) for j in range(4)}
-
-
-estado_jugadores = {0: {"fuera":0},1: {"fuera":0},2: {"fuera":0},3: {"fuera":0}}
+estado_jugadores = {0: {"fuera": 0}, 1: {"fuera": 0}, 2: {"fuera": 0}, 3: {"fuera": 0}}
 ultimo_dado = 0
 
-
+# Interfaz TK
 root = tk.Tk()
-root.title("Ludo 15x15 + MASM")
+root.title("Ludo con MASM + Python")
 
 main_frame = tk.Frame(root, bg="#f0f0f0")
-main_frame.pack(padx=10,pady=10)
+main_frame.pack(padx=10, pady=10)
 
-canvas = tk.Canvas(main_frame, width=TABLERO_SIZE, height=TABLERO_SIZE, highlightthickness=0)
-canvas.grid(row=0,column=0)
+canvas = tk.Canvas(main_frame, width=800, height=500, highlightthickness=0)
+canvas.grid(row=0, column=0)
 
-tablero_img = PhotoImage(file="./tablero.png")
-canvas.create_image(TABLERO_SIZE//2, TABLERO_SIZE//2, image=tablero_img)
+# intenta cargar tablero; si falla, continúa (útil para pruebas)
+try:
+    tablero_img = PhotoImage(file="./tablero.png")
+    canvas.create_image(250, 250, image=tablero_img)
+except Exception:
+    pass
 
-
+# Casas iniciales por jugador
 CASAS = {
-    0:[(0,0),(0,1),(1,0),(1,1)],       # Rojo
-    1:[(0,13),(0,14),(1,13),(1,14)],   # Verde
-    2:[(13,0),(13,1),(14,0),(14,1)],   # Azul
-    3:[(13,13),(13,14),(14,13),(14,14)]# Amarillo
+    0: [(80, 80),  (140, 80),  (80, 140),  (140, 140)],   # Rojo
+    1: [(390, 80), (330, 80), (390, 140), (330, 140)],    # verde
+    2: [(80, 330), (140, 390), (80, 390), (140, 330)],    # azul
+    3: [(390, 330), (330, 390), (390, 390), (330, 330)],  # Amarillo
 }
 
 fichas = {}
 posiciones = {}
-colores = ["red","green","blue","yellow"]
+colores = ["red", "green", "blue", "yellow"]
 
-for j in range(4):
+for jugador in range(4):
     for f in range(4):
-        fila,col = CASAS[j][f]
-        x,y = MATRIZ[fila][col]
-        ficha = canvas.create_oval(x,y,x+CELDA,y+CELDA,fill=colores[j])
-        fichas[(j,f)] = ficha
-        posiciones[(j,f)] = -1
+        x, y = CASAS[jugador][f]
+        ficha = canvas.create_oval(x, y, x+30, y+30, fill=colores[jugador])
+        fichas[(jugador, f)] = ficha
+        posiciones[(jugador, f)] = -1  # En casa
+
+# Panel derecho
+panel = tk.Frame(main_frame, bg="#e6e6e6")
+panel.grid(row=0, column=1, sticky="n", padx=20)
+
+tk.Button(panel, text="Tirar Dado", command=lambda: lanzar_dado()).pack(pady=5)
+resultado_label = tk.Label(panel, text="Dado: ")
+resultado_label.pack()
+turno_label = tk.Label(panel, text="Turno actual: ")
+turno_label.pack()
+fichas_label = tk.Label(panel, text="")
+fichas_label.pack(pady=5)
 
 
-def mover_ficha(jugador):
-    global ultimo_dado
-    camino = CAMINOS[jugador]
-    for f in range(4):
-        if posiciones[(jugador,f)] != -1:
-            pos_actual = posiciones[(jugador,f)]
-            nueva = nueva_pos(pos_actual, ultimo_dado)
-            posiciones[(jugador,f)] = nueva
-            fila, col = camino[nueva]
-            x, y = MATRIZ[fila][col]
-            canvas.coords(fichas[(jugador,f)], x, y, x+CELDA, y+CELDA)
-            fichas_label.config(text=f"Ficha {f+1} movida a casilla {nueva}")
-            break
-    else:
-        fichas_label.config(text="No hay fichas para mover")
-    if ultimo_dado != 6:
-        avanzar_turno_btn()
+# FUNCIONES
+def mostrar_turno():
+    turno = getTurno()
+    # mostramos nombres en lugar de 0..3
+    nombre = NOMBRES_JUGADORES[turno]
+    turno_label.config(text=f"Turno actual: {nombre}")
 
-def sacar_ficha(jugador):
-    global ultimo_dado
-    camino = CAMINOS[jugador]
-    for f in range(4):
-        if posiciones[(jugador,f)] == -1:
-            posiciones[(jugador,f)] = 0
-            fila, col = camino[0]
-            x, y = MATRIZ[fila][col]
-            canvas.coords(fichas[(jugador,f)], x, y, x+CELDA, y+CELDA)
-            estado_jugadores[jugador]["fuera"] += 1
-            fichas_label.config(text=f"Jugador {jugador+1} sacó ficha {f+1}")
-            if ultimo_dado != 6:
-                avanzar_turno_btn()
-            return
-    fichas_label.config(text="No hay fichas para sacar")
-    avanzar_turno_btn()
+
+def preguntar_accion(jugador):
+    global accion_desde_pregunta
+    accion_desde_pregunta = True
+
+    ventana = tk.Toplevel(root)
+    ventana.title("Elige acción")
+    tk.Label(ventana, text=f"Turno: {NOMBRES_JUGADORES[jugador]}").pack(pady=6)
+    tk.Label(ventana, text="¿Qué deseas hacer?").pack(pady=10)
+
+    if estado_jugadores[jugador]["fuera"] < 4:
+        tk.Button(
+            ventana,
+            text="Sacar ficha",
+            command=lambda: (sacar_ficha(jugador), ventana.destroy())
+        ).pack(pady=5)
+
+    if estado_jugadores[jugador]["fuera"] > 0:
+        tk.Button(
+            ventana,
+            text="Mover ficha",
+            command=lambda: (mover_ficha(jugador), ventana.destroy())
+        ).pack(pady=5)
+
 
 def lanzar_dado():
     global ultimo_dado
     jugador = getTurno()
+    mostrar_turno()
+
     valor = tirarDado()
     ultimo_dado = valor
     resultado_label.config(text=f"Dado: {valor}")
 
-    if valor == 6 and estado_jugadores[jugador]["fuera"]==0:
-        sacar_ficha(jugador)
-    elif puedeSacarFicha(valor) and estado_jugadores[jugador]["fuera"]==0:
-        sacar_ficha(jugador)
-    else:
-        mover_ficha(jugador)
+    # ======= CASO 6 =======
+    if valor == 6:
+        # Si no tiene fichas fuera -> sacar obligatoria
+        if estado_jugadores[jugador]["fuera"] == 0:
+            fichas_label.config(text="Sacaste 6, primera ficha obligatoria")
+            sacar_ficha(jugador)
+            return
 
-def mostrar_turno():
-    turno = getTurno()
-    turno_label.config(text=f"Turno actual: Jugador {turno+1}")
+        # Si tiene fichas fuera -> preguntar (sacar o mover)
+        fichas_label.config(text="¡Sacaste 6!")
+        preguntar_accion(jugador)
+        return
+
+    # ======= CASO NO 6 =======
+    # Si no tiene fichas fuera -> turno perdido
+    if estado_jugadores[jugador]["fuera"] == 0:
+        fichas_label.config(text="No tienes fichas fuera. Turno perdido.")
+        terminar_accion()
+        return
+
+    # Si hay fichas fuera -> mover (auto o interactivo; ahora mueve primera disponible)
+    mover_ficha(jugador)
+
 
 def avanzar_turno_btn():
     avanzarTurno()
     mostrar_turno()
 
 
-panel = tk.Frame(main_frame,bg="#e6e6e6")
-panel.grid(row=0,column=1,sticky="n",padx=20)
+def mover_ficha(jugador):
+    global accion_desde_pregunta
 
-tk.Button(panel,text="Tirar Dado",command=lanzar_dado).pack(pady=5)
-resultado_label = tk.Label(panel,text="Dado: ")
-resultado_label.pack()
+    # Verificar que haya fichas fuera
+    if estado_jugadores[jugador]["fuera"] == 0:
+        fichas_label.config(text="No tienes fichas fuera.")
+        terminar_accion()
+        return
 
-tk.Button(panel,text="Mostrar Turno",command=mostrar_turno).pack(pady=5)
-turno_label = tk.Label(panel,text="Turno actual: ")
-turno_label.pack()
+    # Buscar fichas fuera
+    fichas_fuera = []
+    for f in range(4):
+        if posiciones[(jugador, f)] != -1 and posiciones[(jugador, f)] < 1000:  # simple filtro
+            fichas_fuera.append(f)
 
-tk.Button(panel,text="Avanzar Turno",command=avanzar_turno_btn).pack(pady=5)
-fichas_label = tk.Label(panel,text="")
-fichas_label.pack(pady=5)
+    if not fichas_fuera:
+        fichas_label.config(text="Todas tus fichas están en casa o meta.")
+        terminar_accion()
+        return
 
-root.resizable(False,False)
+    # Si solo hay una ficha disponible, moverla, si no -> por ahora primera disponible
+    if len(fichas_fuera) == 1:
+        ficha = fichas_fuera[0]
+    else:
+        ficha = fichas_fuera[0]  # aquí podrías abrir selector
+
+    pos = posiciones[(jugador, ficha)]
+    # llamar a la DLL: posActual, pasos, jugador
+    try:
+        nueva = nueva_pos(pos, ultimo_dado, jugador)
+    except Exception as e:
+        fichas_label.config(text=f"Error al calcular nueva posición: {e}")
+        terminar_accion()
+        return
+
+    posiciones[(jugador, ficha)] = nueva
+
+    # Si la nueva posición está fuera del arreglo CAMINO -> la consideramos 'meta' y ocultamos
+    if nueva >= len(CAMINO) or nueva < 0:
+        fichas_label.config(text=f"¡Ficha {ficha + 1} llegó a la meta o fuera de mapa ({nueva})!")
+        canvas.coords(fichas[(jugador, ficha)], -100, -100, -100, -100)
+        estado_jugadores[jugador]["fuera"] -= 1
+    else:
+        # mover gráficamente
+        x, y = CAMINO[nueva]
+        canvas.coords(fichas[(jugador, ficha)], x, y, x + 30, y + 30)
+        fichas_label.config(text=f"Ficha {ficha + 1} movida a pos {nueva}")
+
+    # ---- SI VIENE DE PREGUNTA, NO AVANZAMOS TURNO (solo limpiamos flag) ----
+    if accion_desde_pregunta:
+        accion_desde_pregunta = False
+        return
+
+    terminar_accion()
+
+
+def sacar_ficha(jugador):
+    global accion_desde_pregunta
+
+    for f in range(4):
+        if posiciones[(jugador, f)] == -1:
+            # posiciones de salida por jugador
+            pos_inicial = [0, 13, 26, 39][jugador]
+
+            posiciones[(jugador, f)] = pos_inicial
+            # si CAMINO no tiene esa casilla, proteger
+            if 0 <= pos_inicial < len(CAMINO):
+                x, y = CAMINO[pos_inicial]
+                canvas.coords(fichas[(jugador, f)], x, y, x + 30, y + 30)
+            else:
+                canvas.coords(fichas[(jugador, f)], -100, -100, -100, -100)
+
+            estado_jugadores[jugador]["fuera"] += 1
+            fichas_label.config(text=f"{NOMBRES_JUGADORES[jugador]} sacó ficha {f + 1}")
+
+            # si venía de pregunta: solo limpiar flag y no avanzar turno
+            if accion_desde_pregunta:
+                accion_desde_pregunta = False
+                return True
+
+            terminar_accion()
+            return True
+
+    fichas_label.config(text="No tienes fichas en casa.")
+    return False
+
+
+def terminar_accion():
+    global ultimo_dado
+    # Turno extra por 6: limpiamos dado y mantenemos turno actual
+    if ultimo_dado == 6:
+        ultimo_dado = 0
+        mostrar_turno()
+        return
+
+    # Cambiar turno normal
+    ultimo_dado = 0
+    avanzarTurno()
+    mostrar_turno()
+
+
+# Botones y arranque
+tk.Button(panel, text="Avanzar Turno (manual)", command=avanzar_turno_btn).pack(pady=5)
+root.resizable(False, False)
+mostrar_turno()
 root.mainloop()
