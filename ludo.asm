@@ -7,6 +7,7 @@ PUBLIC getTurno
 PUBLIC avanzarTurno
 PUBLIC puedeSacarFicha
 PUBLIC moverFicha
+PUBLIC verificarVictoria
 
 .data
 
@@ -14,7 +15,6 @@ semilla        DWORD 0
 inicializada   BYTE 0
 
 turnoActual    DWORD 0     ; 0-3
-
 
 .code
 
@@ -71,28 +71,14 @@ puedeSacarFicha ENDP
 
 
 
-; ============================================================
 ; DWORD moverFicha(DWORD posActual, DWORD pasos, DWORD jugador)
-; Reglas:
-;  - Casa = -1
-;  - Sale con 5 o 6
-;  - Tablero principal = 0 a 51 (52 casillas)
-;  - Zonas seguras:
-;        J0 - 52-57 (meta 57)
-;        J1 - 58-63 (meta 63)
-;        J2 - 64-69 (meta 69)
-;        J3 - 70-75 (meta 75)
-;  - Meta final = 100
-; ============================================================
-
 moverFicha PROC STDCALL posActual:DWORD, pasos:DWORD, jugador:DWORD
+
     mov eax, posActual     ; eax = posActual
     mov ebx, pasos         ; ebx = pasos
     mov ecx, jugador       ; ecx = jugador
 
-    ; =============================
-    ; 1) SI ESTa EN CASA (-1)
-    ; =============================
+  
     cmp eax, -1
     jne verificar_seguro
 
@@ -116,42 +102,37 @@ salir_de_casa:
     mov eax, 39
     jmp done
 
-j0_s:
-mov eax, 0  
-jmp done
+    j0_s:
+    mov eax, 0  
+    jmp done
 
-j1_s:
-mov eax, 13 
-jmp done
+    j1_s:
+    mov eax, 13 
+    jmp done
 
-j2_s: 
-mov eax, 26 
-jmp done
+    j2_s: 
+    mov eax, 26 
+    jmp done
 
-    ; =============================
-    ; 2) VERIFICAR ZONA SEGURA
-    ; =============================
-verificar_seguro:
+
+   verificar_seguro:
     cmp eax, 100
     je poner_meta
 
     cmp eax, 52
     jae mover_seguro
 
-    ; =============================
-    ; 3) MOVIMIENTO EN TABLERO
-    ; =============================
+
     mov edx, eax        ; guardar posicion original
     add eax, ebx        ; mover
 
-    ; ----- aplicar wrap 0–51 -----
+  
     cmp eax, 52
     jl  comprobar_portal
     sub eax, 52
 
 comprobar_portal:
 
-    ; ========== PORTALES ==========
     ; JUGADOR 0 portal = 51 - zona 52
     cmp ecx, 0
     jne portal_j1
@@ -167,8 +148,6 @@ comprobar_portal:
 
 normal_j0:
     jmp wrap_done
-
-; --------------------------------------------------
 
 portal_j1:
     ; J1 portal = 12 - zona 58
@@ -186,8 +165,6 @@ portal_j1:
 normal_j1:
     jmp wrap_done
 
-; --------------------------------------------------
-
 portal_j2:
     ; J2 portal = 25 - zona 64
     cmp ecx, 2
@@ -203,8 +180,6 @@ portal_j2:
 
 normal_j2:
     jmp wrap_done
-
-; --------------------------------------------------
 
 portal_j3:
     ; J3 portal = 38 - zona 70
@@ -222,9 +197,6 @@ normal_j3:
 wrap_done:
     jmp done
 
-; ============================================================
-; 4) MOVIMIENTO EN ZONA SEGURA
-; ============================================================
 mover_seguro:
     add eax, ebx
 
@@ -271,15 +243,67 @@ cmp eax, 75
 jg poner_meta
 jmp done
 
-; ============================================================
+
 poner_meta:
 mov eax, 100
 jmp done
 
 
-; ============================================================
 done:
     ret 12
 moverFicha ENDP
+
+
+
+; int verificarVictoria(int jugador, int meta0, int meta1, int meta2, int meta3)
+; devuelve 1 si el jugador ganó, 0 si no
+verificarVictoria PROC jugador:DWORD, meta0:DWORD, meta1:DWORD, meta2:DWORD, meta3:DWORD
+    mov eax, jugador
+    cmp eax, 0
+    je check0
+    cmp eax, 1
+    je check1
+    cmp eax, 2
+    je check2
+    cmp eax, 3
+    je check3
+    xor eax, eax      ; jugador inválido -> no ganó
+    ret
+
+check0:
+    mov eax, meta0
+    cmp eax, 4
+    je gana
+    xor eax, eax
+    ret
+
+check1:
+    mov eax, meta1
+    cmp eax, 4
+    je gana
+    xor eax, eax
+    ret
+
+check2:
+    mov eax, meta2
+    cmp eax, 4
+    je gana
+    xor eax, eax
+    ret
+
+check3:
+    mov eax, meta3
+    cmp eax, 4
+    je gana
+    xor eax, eax
+    ret
+
+gana:
+    mov eax, 1
+    ret
+
+verificarVictoria ENDP
+END
+
 
 END

@@ -18,9 +18,12 @@ nueva_pos = dll.moverFicha
 nueva_pos.argtypes = [c_int, c_int, c_int]  # posActual, pasos, jugador
 nueva_pos.restype = c_int
 
-# ----------------------------
-# Globals / estado
-# ----------------------------
+verificarVictoriaMASM = dll.verificarVictoria
+verificarVictoriaMASM.argtypes = [c_int, c_int, c_int, c_int, c_int]
+verificarVictoriaMASM.restype = c_int
+
+
+
 accion_desde_pregunta = False
 NOMBRES_JUGADORES = ["Rojo", "Verde", "Amarillo", "Azul"]
 
@@ -286,6 +289,7 @@ def seleccionar_ficha(jugador, fichas_fuera, callback):
             command=lambda ficha=f: (callback(ficha), ventana.destroy())
         ).pack(pady=5)
 
+
 def mover_ficha_seleccionada(jugador, ficha):
     global accion_desde_pregunta
 
@@ -316,6 +320,20 @@ def mover_ficha_seleccionada(jugador, ficha):
         canvas.coords(fichas[(jugador, ficha)], x, y, x + 30, y + 30)
         fichas_label.config(text=f"Ficha {ficha + 1} movida a pos {nueva}")
 
+        # ==== LOGICA DE COMER FICHA EN PYTHON ====
+        for j in range(4):
+            if j == jugador:
+                continue  # no comemos nuestras propias fichas
+
+            for f in range(4):
+                if posiciones[(j, f)] == nueva:
+                    # ficha enemiga encontrada → devolver a casa
+                    posiciones[(j, f)] = -1
+                    x_casa, y_casa = CASAS[j][f]
+                    canvas.coords(fichas[(j, f)], x_casa, y_casa, x_casa+30, y_casa+30)
+                    estado_jugadores[j]["fuera"] -= 1
+                    fichas_label.config(text=f"{NOMBRES_JUGADORES[jugador]} comió una ficha de {NOMBRES_JUGADORES[j]}")
+
     # Si viene de pregunta → NO avanzar turno
     if accion_desde_pregunta:
         accion_desde_pregunta = False
@@ -323,22 +341,24 @@ def mover_ficha_seleccionada(jugador, ficha):
 
     terminar_accion()
 
+
+
 def actualizar_contador_meta():
     m = [estado_jugadores[i]["meta"] for i in range(4)]
     meta_label.config(text=f"Fichas en meta: {m[0]} - {m[1]} - {m[2]} - {m[3]}")
 
 
 def verificar_victoria(jugador):
-    if estado_jugadores[jugador]["meta"] == 4:
+    metas = [estado_jugadores[i]["meta"] for i in range(4)]
+    gano = verificarVictoriaMASM(jugador, metas[0], metas[1], metas[2], metas[3])
+    if gano:
         ganador = NOMBRES_JUGADORES[jugador]
         messagebox.showinfo("🎉 ¡Ganaste!", f"El jugador {ganador} ha ganado el juego con sus 4 fichas en meta.")
-
-        # opcional: desactivar botones
         for widget in panel.winfo_children():
             widget.config(state="disabled")
-
         return True
     return False
+
 
 
 root.resizable(False, False)
