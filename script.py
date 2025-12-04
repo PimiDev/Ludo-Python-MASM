@@ -342,7 +342,6 @@ def mover_ficha_seleccionada(jugador, ficha):
     terminar_accion()
 
 
-
 def actualizar_contador_meta():
     m = [estado_jugadores[i]["meta"] for i in range(4)]
     meta_label.config(text=f"Fichas en meta: {m[0]} - {m[1]} - {m[2]} - {m[3]}")
