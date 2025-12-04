@@ -2,38 +2,23 @@
 .model flat, stdcall
 .stack 4096
 
-PUBLIC sumarDosNumeros
-PUBLIC restarDosNumeros
 PUBLIC tirarDado
 PUBLIC getTurno
 PUBLIC avanzarTurno
 PUBLIC puedeSacarFicha
 PUBLIC moverFicha
+PUBLIC traducirPosicion
 
 .data
 
 semilla        DWORD 0
 inicializada   BYTE 0
 
-turnoActual    DWORD 0      ; 0–3
+turnoActual    DWORD 0     ; 0-3
 
 
 .code
 
-
-; int sumarDosNumeros(int a, int b)
-sumarDosNumeros PROC STDCALL a:DWORD, b:DWORD
-    mov eax, a
-    add eax, b
-    ret 8
-sumarDosNumeros ENDP
-
-; int restarDosNumeros(int a, int b)
-restarDosNumeros PROC STDCALL a:DWORD, b:DWORD
-    mov eax, a
-    sub eax, b
-    ret 8
-restarDosNumeros ENDP
 
 
 tirarDado PROC STDCALL
@@ -85,36 +70,144 @@ puedeSacarFicha PROC STDCALL dado:DWORD
     ret 4
 puedeSacarFicha ENDP
 
-; int moverFicha(int posActual, int pasos)
-moverFicha PROC STDCALL posActual:DWORD, pasos:DWORD
 
+; DWORD moverFicha(DWORD posActual, DWORD pasos, DWORD jugador)
+moverFicha PROC STDCALL posActual:DWORD, pasos:DWORD, jugador:DWORD
     mov eax, posActual
     mov ebx, pasos
+    mov ecx, jugador
 
+    ; Si está en casa (-1)
     cmp eax, -1
-    jne normal_move
+    jne verificar_seguro
 
+    ; Solo puede salir con 6
     cmp ebx, 6
-    jne no_move
+    jne stay_home
+    
+    ; Salir a la primera casilla según jugador
+    cmp ecx, 0
+    je jugador0_salida
+    cmp ecx, 1
+    je jugador1_salida
+    cmp ecx, 2
+    je jugador2_salida
+    ; jugador 3
+    mov eax, 39
+    jmp done
 
+jugador0_salida:
     mov eax, 0
-    jmp end_move
+    jmp done
+jugador1_salida:
+    mov eax, 13
+    jmp done
+jugador2_salida:
+    mov eax, 26
+    jmp done
 
-normal_move:
+stay_home:
+    mov eax, -1
+    jmp done
+
+verificar_seguro:
+    ; Si está en zona segura (pos >= 52)
+    cmp eax, 52
+    jae mover_en_seguro
+
+    ; Movimiento normal en tablero principal
     add eax, ebx
+    
+    ; Verificar si pasa por entrada a zona segura
+    cmp ecx, 0
+    jne check_jugador1
+    ; Jugador 0 - entrada en casilla 51
+    cmp eax, 52
+    jl check_wrap
+    mov eax, 52  ; entrar a zona segura
+    jmp done
+
+check_jugador1:
+    cmp ecx, 1
+    jne check_jugador2
+    ; Jugador 1 - entrada después de casilla 12
+    cmp eax, 13
+    jl check_wrap
+    ; Si pasa de 13, ir a zona segura
+    sub eax, 13
+    add eax, 52
+    jmp done
+
+check_jugador2:
+    cmp ecx, 2
+    jne check_jugador3
+    ; Jugador 2 - entrada después de casilla 25
+    cmp eax, 26
+    jl check_wrap
+    ; Si pasa de 26, ir a zona segura
+    sub eax, 26
+    add eax, 58  ; 52 + 6
+    jmp done
+
+check_jugador3:
+    ; Jugador 3 - entrada después de casilla 38
+    cmp eax, 39
+    jl check_wrap
+    ; Si pasa de 39, ir a zona segura
+    sub eax, 39
+    add eax, 64  ; 52 + 12
+    jmp done
+
+check_wrap:
+    ; Wrap alrededor del tablero (0-51)
     cmp eax, 51
-    jle end_move
-
+    jle done
     sub eax, 52
+    jmp done
 
-end_move:
-    ret 8        
+mover_en_seguro:
+    ; Ya está en zona segura (52-57 para jugador 0)
+    add eax, ebx
+    cmp eax, 58
+    jl done
+    mov eax, 58  ; Llegó a la meta
+    jmp done
 
-no_move:
-    mov eax, posActual
-    ret 8
-
+done:
+    ret 12
 moverFicha ENDP
+
+
+
+; DWORD traducirPosicion(DWORD jugador, DWORD pos)
+traducirPosicion PROC jugador:DWORD, pos:DWORD
+
+    mov eax, pos
+
+    ; ZONA SEGURA (52+)
+    cmp eax, 52
+    jae seguro
+
+    ; CAMINO GLOBAL 0–51
+    mov ecx, jugador
+    mov edx, 13
+    imul ecx, edx
+    add eax, ecx
+    mov edx, 52
+    div edx
+    mov eax, edx
+    ret
+
+seguro:
+    sub eax, 52
+    mov ecx, jugador
+    mov edx, 6
+    imul ecx, edx
+    add eax, ecx
+    add eax, 52
+    ret
+
+traducirPosicion ENDP
 
 
 END
