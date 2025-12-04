@@ -187,8 +187,12 @@ def mover_ficha(jugador):
     # Si solo hay una ficha disponible, moverla, si no -> por ahora primera disponible
     if len(fichas_fuera) == 1:
         ficha = fichas_fuera[0]
-    else:
-        ficha = fichas_fuera[0]  # aquí podrías abrir selector
+        mover_ficha_seleccionada(jugador, ficha)
+        return
+
+    # Si hay más de una ficha → abrir selector
+    seleccionar_ficha(jugador, fichas_fuera, lambda f: mover_ficha_seleccionada(jugador, f))
+    return
 
     pos = posiciones[(jugador, ficha)]
     # llamar a la DLL: posActual, pasos, jugador
@@ -263,6 +267,47 @@ def terminar_accion():
     ultimo_dado = 0
     avanzarTurno()
     mostrar_turno()
+
+def seleccionar_ficha(jugador, fichas_fuera, callback):
+    ventana = tk.Toplevel(root)
+    ventana.title("Elige qué ficha mover")
+
+    tk.Label(ventana, text=f"Jugador {jugador + 1}: elige una ficha").pack(pady=8)
+
+    for f in fichas_fuera:
+        tk.Button(
+            ventana,
+            text=f"Ficha {f + 1}",
+            width=15,
+            bg=colores[jugador],
+            fg="white",
+            command=lambda ficha=f: (callback(ficha), ventana.destroy())
+        ).pack(pady=5)
+
+def mover_ficha_seleccionada(jugador, ficha):
+    global accion_desde_pregunta
+
+    pos = posiciones[(jugador, ficha)]
+    nueva = nueva_pos(pos, ultimo_dado, jugador)
+    posiciones[(jugador, ficha)] = nueva
+
+    # Llegó a meta
+    if nueva >= 58:
+        fichas_label.config(text=f"¡Ficha {ficha + 1} llegó a la meta!")
+        canvas.coords(fichas[(jugador, ficha)], -100, -100, -100, -100)
+        estado_jugadores[jugador]["fuera"] -= 1
+    else:
+        x, y = CAMINO[nueva]
+        canvas.coords(fichas[(jugador, ficha)], x, y, x + 30, y + 30)
+        fichas_label.config(text=f"Ficha {ficha + 1} movida a pos {nueva}")
+
+    if accion_desde_pregunta:
+        accion_desde_pregunta = False
+        return
+
+    terminar_accion()
+
+
 
 
 # Botones y arranque
