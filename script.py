@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import Canvas, PhotoImage
 from ctypes import WinDLL, c_int, c_uint
-
+from tkinter import messagebox
 
 dll = WinDLL("./LudoLibreria.dll")
 
@@ -33,18 +33,18 @@ CAMINO = [
 
     #13-25 (14-26)
     (260, 70), (260, 100), (260, 120), (260, 150), (260, 180),
-    (290, 210), (320, 210), (340, 210), (360, 210), (380, 210), (410, 210),
-    (410, 210), (410, 260),
+    (290, 210), (320, 210), (350, 210), (380, 210), (400, 210), (430, 210),
+    (430, 230), (430, 260),
 
     #26-38 (27-39)
-    (400, 260), (360, 260), (340, 260), (320, 260), (300, 260),
-    (260, 270), (260, 290), (260, 310), (260, 340), (260, 360), (260, 380),
-    (240, 380), (210, 380),
+    (400, 260), (370, 260), (350, 260), (320, 260), (290, 260),
+    (260, 290), (260, 320), (260, 340), (260, 350), (260, 370), (260, 390),
+    (260, 400), (260, 420),
 
     #39-51 (40- 52)
-   (210, 400), (210, 340), (210, 320), (210, 300), (210, 280),
-   (260, 260), (220, 260), (200,260), (180,260), (150,260), (100,260),
-    (70,230),(100,230),
+   (210, 400), (210, 370), (210, 350), (210, 320), (210, 280),
+   (180, 260), (150, 260), (130,260), (100,260), (70,260), (40,260),
+    (40,230),(40,210),
 
     #zona segura roja 52-57 (53-58)
     (70,230),(100,230),(130,230),(150,230),(180,230),(210,230),
@@ -53,27 +53,23 @@ CAMINO = [
     (240,70),(240,100),(240,120),(240,150),(240,180),(240,210),
 
     #zona segura amarillo 64-69 (65-70)
-    (360,230),(340,230),(320,230),(290,230),(260,230),(210,230),
+    (400,230),(370,230),(350,230),(320,230),(290,230),(260,230),
 
     #zona segura azul 70-75 (71-76)
-    (240,360),(240,340),(240,320),(240,300),(240,280),(240,260),
+    (230,370),(230,360),(230,340),(230,320),(230,280),(230,260),
 ]
 
 estado_jugadores = {
-    0: {"fuera": 0},
-    1: {"fuera": 0},
-    2: {"fuera": 0},
-    3: {"fuera": 0}
+    0: {"fuera": 0, "meta": 0},
+    1: {"fuera": 0, "meta": 0},
+    2: {"fuera": 0, "meta": 0},
+    3: {"fuera": 0, "meta": 0},
 }
 
 ultimo_dado = 0
 
+
 # Interfaz TK
-
-
-
-
-
 root = tk.Tk()
 root.title("Ludo con MASM + Python")
 
@@ -116,10 +112,15 @@ panel.grid(row=0, column=1, sticky="n", padx=20)
 tk.Button(panel, text="Tirar Dado", command=lambda: lanzar_dado()).pack(pady=5)
 resultado_label = tk.Label(panel, text="Dado: ")
 resultado_label.pack()
+
 turno_label = tk.Label(panel, text="Turno actual: ")
 turno_label.pack()
+
 fichas_label = tk.Label(panel, text="")
 fichas_label.pack(pady=5)
+
+meta_label = tk.Label(panel, text="Fichas en meta: 0–0–0–0")
+meta_label.pack(pady=5)
 
 
 # FUNCIONES
@@ -139,7 +140,10 @@ def preguntar_accion(jugador):
     tk.Label(ventana, text=f"Turno: {NOMBRES_JUGADORES[jugador]}").pack(pady=6)
     tk.Label(ventana, text="¿Qué deseas hacer?").pack(pady=10)
 
-    if estado_jugadores[jugador]["fuera"] < 4:
+    # Ver si existe al menos UNA ficha en casa (pos == -1)
+    hay_fichas_en_casa = any(posiciones[(jugador, f)] == -1 for f in range(4))
+
+    if hay_fichas_en_casa:
         tk.Button(
             ventana,
             text="Sacar ficha",
@@ -157,7 +161,6 @@ def preguntar_accion(jugador):
 def lanzar_dado():
     global ultimo_dado
     jugador = getTurno()
-    mostrar_turno()
 
     valor = tirarDado()
     ultimo_dado = valor
@@ -205,7 +208,7 @@ def mover_ficha(jugador):
     fichas_fuera = []
     for f in range(4):
         pos = posiciones[(jugador, f)]
-        if pos != -1 and pos < 1000:
+        if pos >= 0 and pos < len(CAMINO):
             fichas_fuera.append(f)
 
     if not fichas_fuera:
@@ -302,6 +305,12 @@ def mover_ficha_seleccionada(jugador, ficha):
         fichas_label.config(text=f"¡Ficha {ficha + 1} llegó a la meta ({nueva})!")
         canvas.coords(fichas[(jugador, ficha)], -100, -100, -100, -100)
         estado_jugadores[jugador]["fuera"] -= 1
+        estado_jugadores[jugador]["meta"] += 1
+        actualizar_contador_meta()
+
+        if verificar_victoria(jugador):
+            return
+
     else:
         x, y = CAMINO[nueva]
         canvas.coords(fichas[(jugador, ficha)], x, y, x + 30, y + 30)
@@ -314,8 +323,22 @@ def mover_ficha_seleccionada(jugador, ficha):
 
     terminar_accion()
 
+def actualizar_contador_meta():
+    m = [estado_jugadores[i]["meta"] for i in range(4)]
+    meta_label.config(text=f"Fichas en meta: {m[0]} - {m[1]} - {m[2]} - {m[3]}")
 
 
+def verificar_victoria(jugador):
+    if estado_jugadores[jugador]["meta"] == 4:
+        ganador = NOMBRES_JUGADORES[jugador]
+        messagebox.showinfo("🎉 ¡Ganaste!", f"El jugador {ganador} ha ganado el juego con sus 4 fichas en meta.")
+
+        # opcional: desactivar botones
+        for widget in panel.winfo_children():
+            widget.config(state="disabled")
+
+        return True
+    return False
 
 
 root.resizable(False, False)

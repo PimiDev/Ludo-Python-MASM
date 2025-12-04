@@ -133,7 +133,7 @@ jmp done
     ; =============================
 verificar_seguro:
     cmp eax, 100
-    je ya_meta
+    je poner_meta
 
     cmp eax, 52
     jae mover_seguro
@@ -230,40 +230,52 @@ mover_seguro:
 
     ; Jugador 0: meta en 57
     cmp ecx, 0
-    jne meta_j1
-    cmp eax, 57
-    jle done
-    mov eax, 100
-    jmp done
+jne meta_j1
+
+cmp eax, 57
+je poner_meta
+cmp eax, 57
+jg poner_meta
+jmp done
+
 
 meta_j1:
     ; Jugador 1: meta 63
     cmp ecx, 1
-    jne meta_j2
-    cmp eax, 63
-    jle done
-    mov eax, 100
-    jmp done
+jne meta_j2
+
+cmp eax, 63
+je poner_meta
+cmp eax, 63
+jg poner_meta
+jmp done
+
 
 meta_j2:
     ; Jugador 2: meta 69
     cmp ecx, 2
-    jne meta_j3
-    cmp eax, 69
-    jle done
-    mov eax, 100
-    jmp done
+jne meta_j3
+
+cmp eax, 69
+je poner_meta
+cmp eax, 69
+jg poner_meta
+jmp done
+
 
 meta_j3:
     ; Jugador 3: meta 75
     cmp eax, 75
-    jle done
-    mov eax, 100
-    jmp done
+je poner_meta
+cmp eax, 75
+jg poner_meta
+jmp done
 
 ; ============================================================
-ya_meta:
-    mov eax, 100
+poner_meta:
+mov eax, 100
+jmp done
+
 
 ; ============================================================
 done:
